@@ -9,12 +9,12 @@ class Config:
     DB_PATH = os.path.join(DATA_DIR, "database", "attendance.db")
     ENCODINGS_PATH = os.path.join(DATA_DIR, "encodings", "face_encodings.pkl")
     FACES_STORAGE_DIR = os.path.join(DATA_DIR, "faces")
-    EXPORT_DIR = os.path.join(BASE_DIR, "exports") # <--- MỚI
+    EXPORT_DIR = os.path.join(BASE_DIR, "exports") 
     
-    # Nơi chứa các file thuật toán bổ trợ (nếu có)
+    # Nơi chứa các file thuật toán bổ trợ  
     MODELS_DIR = os.path.join(BASE_DIR, "models")
     SHAPE_PREDICTOR_PATH = os.path.join(MODELS_DIR, "shape_predictor_68_face_landmarks.dat")
-    LOG_PATH = os.path.join(BASE_DIR, "logs", "app.log")  # <--- THÊM DÒNG NÀY
+    LOG_PATH = os.path.join(BASE_DIR, "logs", "app.log") 
     
     # --- CẤU HÌNH CAMERA ---
     CAMERA_INDEX = 0      # 0 là webcam mặc định

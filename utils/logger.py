@@ -1,32 +1,35 @@
 import logging
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 from app.config import Config
 
-def setup_logger(name="FaceAttendance"):
-    # Đảm bảo thư mục logs tồn tại
+def setup_logger(name="FaceApp"):
     log_dir = os.path.dirname(Config.LOG_PATH)
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG) # Bắt tất cả mọi level lỗi
 
-    # Tránh duplicate log khi gọi hàm nhiều lần
     if logger.hasHandlers():
         return logger
 
-    # 1. Ghi log ra file (Tự động xoay file khi đầy 5MB, giữ lại 3 file cũ)
-    file_handler = RotatingFileHandler(Config.LOG_PATH, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(file_formatter)
+    # Format log chi tiết: Thời gian - Tên Module - Mức độ - Nội dung
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
+    )
 
-    # 2. Ghi log ra màn hình Console
-    console_handler = logging.StreamHandler()
-    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
-    console_handler.setFormatter(console_formatter)
+    file_handler = RotatingFileHandler(
+        Config.LOG_PATH, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.DEBUG)
 
-    # Thêm handlers vào logger
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
+
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
