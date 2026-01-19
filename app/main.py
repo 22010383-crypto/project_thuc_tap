@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from utils.logger import setup_logger
+from app.gui.register_window import RegisterWindow
 
 logger = setup_logger("MainApp")
 
@@ -17,6 +18,8 @@ class MainApp(tk.Tk):
         # UI Header
         tk.Label(self, text="HỆ THỐNG ĐIỂM DANH AI", font=("Segoe UI", 28, "bold"), bg="#2c3e50", fg="white").pack(pady=50)
         
+        tk.Button(btn_frame, text="👤 ĐĂNG KÝ MỚI", command=self.open_register, bg="#3498db", **btn_style).pack(pady=10)
+
         btn_frame = tk.Frame(self, bg="#2c3e50")
         btn_frame.pack(pady=10)
         
@@ -27,6 +30,10 @@ class MainApp(tk.Tk):
 
         tk.Label(self, text="Version 2.1 - Single Task Mode", bg="#2c3e50", fg="#95a5a6").pack(side=tk.BOTTOM, pady=20)
 
+    def open_register(self):
+        self.withdraw()  # Ẩn menu chính
+        RegisterWindow(self, on_close=self.show_menu)
+    
     def show_menu(self):
         """Hàm này được gọi khi cửa sổ con đóng lại"""
         self.deiconify()  # Hiện lại menu chính
