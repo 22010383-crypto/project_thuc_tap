@@ -8,7 +8,7 @@ logger = setup_logger("MainApp")
 class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("FACE ATTENDANCE SYSTEM PRO")
+        self.title("FACE ATTENDANCE SYSTEM")
         self.geometry("800x500")
         self.configure(bg="#2c3e50")
         self.resizable(False, False)
