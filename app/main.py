@@ -23,12 +23,8 @@ class MainApp(tk.Tk):
         btn_frame = tk.Frame(self, bg="#2c3e50")
         btn_frame.pack(pady=10)
         
-        # Định nghĩa style chung cho nút
         btn_style = {"font": ("Segoe UI", 14), "width": 25, "fg": "white", "relief": tk.FLAT, "cursor": "hand2"}
-        # Nút Thoát
         tk.Button(btn_frame, text="❌ THOÁT", command=self.quit_app, bg="#c0392b", **btn_style).pack(pady=10)
-
-        tk.Label(self, text="Version 2.1 - Single Task Mode", bg="#2c3e50", fg="#95a5a6").pack(side=tk.BOTTOM, pady=20)
 
     def open_register(self):
         self.withdraw()  # Ẩn menu chính
