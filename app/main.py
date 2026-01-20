@@ -3,6 +3,7 @@ from tkinter import messagebox
 import sys
 import traceback
 from app.gui.register_window import RegisterWindow
+from app.gui.user_management_window import UserManagementWindow
 from utils.logger import setup_logger
 
 logger = setup_logger("MainApp")
@@ -27,6 +28,8 @@ class MainApp(tk.Tk):
         btn_style = {"font": ("Segoe UI", 14), "width": 25, "fg": "white", "relief": tk.FLAT, "cursor": "hand2"}
 
         tk.Button(btn_frame, text="👤 ĐĂNG KÝ MỚI", command=self.open_register, bg="#3498db", **btn_style).pack(pady=10)
+        tk.Button(btn_frame, text="📋 QUẢN LÝ SINH VIÊN", command=self.open_management, bg="#e67e22", **btn_style).pack(pady=10)
+
         tk.Button(btn_frame, text="❌ THOÁT", command=self.quit_app, bg="#c0392b", **btn_style).pack(pady=10)
 
     def show_error(self, exc_type, exc_value, exc_traceback):
@@ -44,6 +47,10 @@ class MainApp(tk.Tk):
     def open_register(self):
         self.withdraw()
         RegisterWindow(self, on_close=self.show_menu)
+    
+    def open_management(self):
+        self.withdraw()
+        UserManagementWindow(self, on_close=self.show_menu)
 
     def show_menu(self):
         self.deiconify()
