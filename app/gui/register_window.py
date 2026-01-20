@@ -12,166 +12,108 @@ class RegisterWindow(tk.Toplevel):
     def __init__(self, parent, on_close):
         super().__init__(parent)
         self.on_close_callback = on_close
+        self.title("Đăng Ký Sinh Viên (Yêu cầu Chớp mắt)")
+        self.geometry("950x650")
         
-        self.title("Đăng Ký Sinh Viên Mới")
-        self.geometry("950x600")
-        self.resizable(False, False)
-        
-        # --- KHỞI TẠO CÁC MODULE ---
         self.db = DatabaseManager()
         self.encoder = FaceEncoder()
         
-        # Camera
         self.video = VideoStream(Config.CAMERA_INDEX).start()
-        
-        # Trạng thái hoạt động
         self.is_running = True
-        self.current_frame = None # Biến lưu frame hiện tại để thread khác truy cập
+        self.current_frame = None
+        self.is_capturing = False 
+        self.consec_closed = 0  
         
-        # --- XÂY DỰNG GIAO DIỆN ---
         self.create_ui()
-        
-        # --- BẮT ĐẦu CAMERA ---
         self.update_camera()
-        
-        # Xử lý sự kiện khi bấm nút X đóng cửa sổ
         self.protocol("WM_DELETE_WINDOW", self.on_window_close)
-        
+
     def create_ui(self):
-        """Tạo layout chia đôi: Trái (Input) - Phải (Camera)"""
-        # 1. Panel Trái: Form nhập liệu
-        left_panel = tk.Frame(self, width=350, bg="#f5f6fa")
-        left_panel.pack(side=tk.LEFT, fill=tk.BOTH)
-        left_panel.pack_propagate(False) # Giữ cố định chiều rộng
-
-        # Tiêu đề
-        tk.Label(left_panel, text="THÔNG TIN SINH VIÊN", 
-                 font=("Segoe UI", 16, "bold"), bg="#f5f6fa", fg="#2c3e50").pack(pady=(40, 30))
-
-        self.entry_id = self.create_input_field(left_panel, "Mã Sinh Viên (ID):")
-        self.entry_name = self.create_input_field(left_panel, "Họ và Tên:")
-        self.entry_dept = self.create_input_field(left_panel, "Phòng Ban:")
-
-        self.btn_capture = tk.Button(left_panel, text="📸 CHỤP & LƯU", 
-                                     command=self.start_capture_thread,
-                                     font=("Segoe UI", 12, "bold"), 
-                                     bg="#2ecc71", fg="white", 
-                                     activebackground="#27ae60", activeforeground="white",
-                                     relief=tk.FLAT, height=2, cursor="hand2")
-        self.btn_capture.pack(fill=tk.X, padx=30, pady=40)
-
-        note_text = ("Lưu ý:\n"
-                     "• Nhìn thẳng vào camera\n"
-                     "• Giữ khuôn mặt trong khung xanh\n"
-                     "• Đảm bảo đủ ánh sáng")
-        tk.Label(left_panel, text=note_text, justify=tk.LEFT, 
-                 font=("Segoe UI", 10), bg="#f5f6fa", fg="#7f8c8d").pack(side=tk.BOTTOM, pady=30, padx=30, anchor="w")
-
-        # 2. Panel Phải: Camera Feed
-        right_panel = tk.Frame(self, bg="black")
-        right_panel.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
+        left = tk.Frame(self, width=350, bg="#f5f6fa"); left.pack(side=tk.LEFT, fill=tk.BOTH)
+        tk.Label(left, text="THÊM MỚI SINH VIÊN", font=("Segoe UI", 16, "bold"), bg="#f5f6fa").pack(pady=20)
         
-        self.cam_label = tk.Label(right_panel, bg="black")
-        self.cam_label.pack(expand=True, fill=tk.BOTH)
+        self.e_id = self.mk_input(left, "MSSV:")
+        self.e_name = self.mk_input(left, "Họ Tên:")
+        self.e_cls = self.mk_input(left, "Lớp:")
+        
+        self.btn = tk.Button(left, text="📸 BẮT ĐẦU CHỤP", command=self.prepare_capture, 
+                             bg="#3498db", fg="white", font=("Segoe UI", 12, "bold"), height=2)
+        self.btn.pack(fill=tk.X, padx=30, pady=40)
+        
+        self.lbl_status = tk.Label(left, text="...", bg="#f5f6fa", fg="gray")
+        self.lbl_status.pack(side=tk.BOTTOM, pady=20)
+        
+        right = tk.Frame(self, bg="black"); right.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
+        self.cam = tk.Label(right, bg="black"); self.cam.pack(expand=True, fill=tk.BOTH)
 
-    def create_input_field(self, parent, label_text):
-        """Hàm helper để tạo ô nhập liệu đẹp hơn"""
-        frame = tk.Frame(parent, bg="#f5f6fa")
-        frame.pack(fill=tk.X, padx=30, pady=10)
-        
-        tk.Label(frame, text=label_text, font=("Segoe UI", 11), 
-                 bg="#f5f6fa", fg="#34495e").pack(anchor="w")
-        
-        entry = tk.Entry(frame, font=("Segoe UI", 12), relief=tk.FLAT, bd=1, highlightthickness=1)
-        entry.config(highlightbackground="#bdc3c7", highlightcolor="#3498db")
-        entry.pack(fill=tk.X, pady=(5, 0), ipady=5)
-        return entry
+    def mk_input(self, p, txt):
+        tk.Label(p, text=txt, bg="#f5f6fa").pack(anchor="w", padx=30)
+        e = tk.Entry(p, font=("Segoe UI", 11)); e.pack(fill=tk.X, padx=30, pady=(0,10))
+        return e
 
     def update_camera(self):
-        """Vòng lặp cập nhật hình ảnh từ camera lên giao diện"""
-        if not self.is_running:
-            return
-
+        if not self.is_running: return
         frame = self.video.read()
         if frame is not None:
-            # Lưu frame gốc để thread xử lý (tránh bị resize làm giảm chất lượng nhận diện)
             self.current_frame = frame.copy()
+            disp = frame.copy()
             
-            # Vẽ khung hướng dẫn lên hình hiển thị (không vẽ lên hình lưu)
-            display_frame = frame.copy()
-            h, w, _ = display_frame.shape
+            # Logic Liveness Registration
+            if self.is_capturing:
+                locs = self.detector.detect(frame)
+                if locs:
+                    # Lấy action của khuôn mặt đầu tiên
+                    state = self.liveness.detect_actions(frame, locs[0])
+                    
+                    if state["blink"]:
+                        self.consec_closed += 1
+                    else:
+                        if self.consec_closed >= 2: # Đã nhắm đủ lâu và mở ra
+                            # -> CHỤP NGAY
+                            self.is_capturing = False
+                            self.lbl_status.config(text="Đã phát hiện người thật! Đang lưu...", fg="green")
+                            threading.Thread(target=self.save_data).start()
+                        self.consec_closed = 0
+                        
+                    cv2.putText(disp, "HAY CHOP MAT!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                else:
+                    self.lbl_status.config(text="Không thấy mặt đâu!", fg="red")
             
-            # Vẽ khung chữ nhật bo góc (hoặc thường) màu xanh
-            cv2.rectangle(display_frame, (w//4, h//4), (3*w//4, 3*h//4), (0, 255, 0), 2)
-            cv2.putText(display_frame, "GIU MAT TRONG KHUNG", (w//4 + 20, h//4 - 15), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            
-            # Chuyển đổi để hiển thị trên Tkinter
-            self.photo = cv2_to_pil(display_frame, width=600, height=450)
-            self.cam_label.config(image=self.photo)
-        
-        # Gọi lại sau 10ms (khoảng 100 FPS refresh rate cho UI)
+            h, w, _ = disp.shape
+            cv2.rectangle(disp, (w//4, h//4), (3*w//4, 3*h//4), (0, 255, 0), 2)
+            self.cam.config(image=cv2_to_pil(disp, width=600, height=450))
         self.after(10, self.update_camera)
 
-    def start_capture_thread(self):
-        """Bắt đầu luồng xử lý đăng ký"""
-        # 1. Validate Input (Chạy trên UI Thread)
-        user_id = self.entry_id.get().strip()
-        name = self.entry_name.get().strip()
-        dept = self.entry_dept.get().strip()
-        
-        if not user_id or not name:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập Mã NV và Họ Tên!")
+    def prepare_capture(self):
+        if not self.e_id.get() or not self.e_name.get():
+            messagebox.showwarning("Lỗi", "Nhập thiếu thông tin!")
             return
+        self.is_capturing = True
+        self.consec_closed = 0
+        self.btn.config(state=tk.DISABLED, text="ĐANG ĐỢI CHỚP MẮT...", bg="#e67e22")
 
-        # 2. Khóa giao diện
-        self.btn_capture.config(state=tk.DISABLED, text="⏳ ĐANG XỬ LÝ...", bg="#95a5a6")
-        
-        # 3. Chạy Worker Thread
-        thread = threading.Thread(target=self.process_capture, args=(user_id, name, dept))
-        thread.start()
-
-    def process_capture(self, user_id, name, dept):
-        """Hàm chạy ngầm (Background Worker) - Xử lý nặng"""
-        try:
-            if self.current_frame is None:
-                self.schedule_ui_update(False, "Không nhận được tín hiệu Camera!")
-                return
-
-            if not self.db.add_user(user_id, name, dept):
-                self.schedule_ui_update(False, f"Mã nhân viên '{user_id}' đã tồn tại!")
-                return
-
-            success, message = self.encoder.add_face(self.current_frame, user_id)
-            
-            if success:
-                self.schedule_ui_update(True, f"Đăng ký thành công!\nSinh viên: {name}")
-            else:
-                # ROLLBACK: Nếu AI lỗi (không thấy mặt, mặt mờ...), phải xóa user trong DB
-                self.db.delete_user(user_id)
-                self.schedule_ui_update(False, f"Lỗi xử lý ảnh: {message}")
-
-        except Exception as e:
-            self.schedule_ui_update(False, f"Lỗi hệ thống: {str(e)}")
-
-    def schedule_ui_update(self, success, message):
-        """Cầu nối an toàn để Worker gọi update UI trên Main Thread"""
-        self.after(0, lambda: self.finish_capture(success, message))
-
-    def finish_capture(self, success, message):
-        """Cập nhật giao diện sau khi Worker làm xong"""
-        # Mở lại nút bấm
-        self.btn_capture.config(state=tk.NORMAL, text="📸 CHỤP & LƯU", bg="#2ecc71")
-        
-        if success:
-            messagebox.showinfo("Thành công", message)
-            self.on_window_close() # Đóng cửa sổ đăng ký thành công
+    def save_data(self):
+        sid = self.e_id.get(); name = self.e_name.get(); cls = self.e_cls.get()
+        if not self.db.add_student(sid, name, cls):
+            self.end(False, "MSSV trùng!")
+            return
+        success, msg = self.encoder.add_face(self.current_frame, sid)
+        if success: self.end(True, "Đăng ký thành công!")
         else:
-            messagebox.showerror("Thất bại", message)
+            self.db.delete_student(sid)
+            self.end(False, msg)
+
+    def end(self, success, msg):
+        self.after(0, lambda: self._end_ui(success, msg))
+
+    def _end_ui(self, success, msg):
+        self.is_capturing = False
+        self.btn.config(state=tk.NORMAL, text="BẮT ĐẦU CHỤP", bg="#3498db")
+        if success: messagebox.showinfo("OK", msg); self.on_window_close()
+        else: messagebox.showerror("Lỗi", msg)
 
     def on_window_close(self):
-        """Dọn dẹp tài nguyên khi đóng cửa sổ"""
         self.is_running = False
-        self.video.stop() # Dừng thread camera
-        self.destroy()    # Hủy cửa sổ này
-        self.on_close_callback() # Gọi callback để hiện lại Menu chính
+        self.video.stop()
+        self.destroy()
+        self.on_close_callback()
