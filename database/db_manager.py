@@ -1,17 +1,14 @@
 import sqlite3
-import pandas as pd  
+import pandas as pd
 import os
 from datetime import datetime
 from app.config import Config
-from utils.logger import setup_logger
-
-logger = setup_logger("DB_Manager")
 
 class DatabaseManager:
     def __init__(self):
         self.db_path = Config.DB_PATH
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        os.makedirs(Config.EXPORT_DIR, exist_ok=True) # Tạo folder export
+        os.makedirs(Config.EXPORT_DIR, exist_ok=True)
         self.init_db()
 
     def get_conn(self):
@@ -20,139 +17,111 @@ class DatabaseManager:
         return conn
 
     def init_db(self):
-        try:
-            conn = self.get_conn()
-            schema = """
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
+        conn = self.get_conn()
+        
+        # Bảng Sinh Viên (Student)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS students (
+                student_id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                department TEXT,
+                class_name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+        """)
+        
+        # Bảng Nhật ký (Attendance) - Thêm môn học
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS attendance_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
+                student_id TEXT NOT NULL,
                 checkin_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 date_str TEXT NOT NULL,
-                status TEXT DEFAULT 'Present',
-                FOREIGN KEY(user_id) REFERENCES users(id)
+                subject TEXT,
+                FOREIGN KEY(student_id) REFERENCES students(student_id)
             );
-            """
-            conn.executescript(schema)
-            conn.commit()
-            conn.close()
-            logger.info("Khởi tạo CSDL thành công.")
-        except Exception as e:
-            logger.error(f"Failed to init DB: {e}") 
+        """)
+        conn.commit()
+        conn.close()
 
-    def add_user(self, user_id, name, department):
+    def add_student(self, student_id, name, class_name):
         conn = self.get_conn()
         try:
-            conn.execute("INSERT INTO users (id, name, department) VALUES (?, ?, ?)",
-                         (user_id, name, department))
+            conn.execute("INSERT INTO students (student_id, name, class_name) VALUES (?, ?, ?)",
+                         (student_id, name, class_name))
             conn.commit()
-            logger.info(f"Added new user: {name} ({user_id})")
             return True
         except sqlite3.IntegrityError:
-            logger.warning(f"User ID {user_id} already exists.")
-            return False
-        except Exception as e:
-            logger.error(f"Error adding user: {e}")
             return False
         finally:
             conn.close()
 
-    def log_attendance(self, user_id):
+    def delete_student(self, student_id):
+        conn = self.get_conn()
+        try:
+            conn.execute("DELETE FROM attendance_logs WHERE student_id = ?", (student_id,))
+            conn.execute("DELETE FROM students WHERE student_id = ?", (student_id,))
+            conn.commit()
+            return True
+        except Exception:
+            return False
+        finally:
+            conn.close()
+
+    def log_attendance(self, student_id, subject="General"):
         conn = self.get_conn()
         now = datetime.now()
         date_str = now.strftime("%Y-%m-%d")
-        
         try:
             conn.execute(
-                "INSERT INTO attendance_logs (user_id, checkin_time, date_str) VALUES (?, ?, ?)",
-                (user_id, now, date_str)
+                "INSERT INTO attendance_logs (student_id, checkin_time, date_str, subject) VALUES (?, ?, ?, ?)",
+                (student_id, now, date_str, subject)
             )
             conn.commit()
-            logger.info(f"Attendance logged for {user_id}")
             return True
-        except Exception as e:
-            logger.error(f"Error logging attendance for {user_id}: {e}")
+        except Exception:
             return False
         finally:
             conn.close()
 
-    def get_last_checkin(self, user_id):
-        """Lấy lần điểm danh gần nhất để tính cooldown"""
-        conn = self.get_conn()
-        cursor = conn.execute(
-            "SELECT checkin_time FROM attendance_logs WHERE user_id = ? ORDER BY checkin_time DESC LIMIT 1",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            return datetime.fromisoformat(row['checkin_time'])
-        return None
-    
-    def get_all_users(self):
-        """Lấy danh sách tất cả sinh viên"""
-        conn = self.get_conn()
-        try:
-            cursor = conn.execute("SELECT * FROM users ORDER BY created_at DESC")
-            return [dict(row) for row in cursor.fetchall()]
-        finally:
-            conn.close()
-
-    def delete_user(self, user_id):
-        """Xóa sinh viên và log liên quan"""
-        conn = self.get_conn()
-        try:
-            conn.execute("DELETE FROM attendance_logs WHERE user_id = ?", (user_id,))
-            conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-            conn.commit()
-            logger.info(f"Deleted user: {user_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Error deleting user {user_id}: {e}")
-            return False
-        finally:
-            conn.close()
-
-    def update_user(self, user_id, name, department):
-        """Cập nhật thông tin sinh viên"""
-        conn = self.get_conn()
-        try:
-            conn.execute("UPDATE users SET name = ?, department = ? WHERE id = ?", 
-                         (name, department, user_id))
-            conn.commit()
-            return True
-        except Exception as e:
-            logger.error(f"Error updating user {user_id}: {e}")
-            return False
-        finally:
-            conn.close()
-
-    def export_attendance_to_excel(self):
-        """Xuất dữ liệu điểm danh ra Excel"""
+    def export_excel(self):
         conn = self.get_conn()
         try:
             query = """
-            SELECT a.id, a.user_id, u.name, u.department, a.checkin_time, a.status 
+            SELECT a.student_id, s.name, s.class_name, a.subject, a.checkin_time
             FROM attendance_logs a
-            JOIN users u ON a.user_id = u.id
+            JOIN students s ON a.student_id = s.student_id
             ORDER BY a.checkin_time DESC
             """
             df = pd.read_sql_query(query, conn)
-            
-            # Tạo tên file theo thời gian
-            filename = f"Attendance_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            filepath = os.path.join(Config.EXPORT_DIR, filename)
-            
-            df.to_excel(filepath, index=False)
-            logger.info(f"Exported report to {filepath}")
-            return True, filepath
+            filename = f"Attendance_List_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            path = os.path.join(Config.EXPORT_DIR, filename)
+            df.to_excel(path, index=False)
+            return True, path
         except Exception as e:
-            logger.error(f"Export failed: {e}")
             return False, str(e)
+        finally:
+            conn.close()
+            
+    def get_all_students(self):
+        """Lấy danh sách toàn bộ sinh viên"""
+        conn = self.get_conn()
+        try:
+            cursor = conn.execute("SELECT * FROM students ORDER BY created_at DESC")
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception:
+            return []
+        finally:
+            conn.close()
+
+    def update_student(self, student_id, name, class_name):
+        """Cập nhật thông tin sinh viên"""
+        conn = self.get_conn()
+        try:
+            conn.execute("UPDATE students SET name = ?, class_name = ? WHERE student_id = ?", 
+                         (name, class_name, student_id))
+            conn.commit()
+            return True
+        except Exception:
+            return False
         finally:
             conn.close()

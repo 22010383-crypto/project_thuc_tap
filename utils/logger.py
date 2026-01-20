@@ -10,12 +10,11 @@ def setup_logger(name="FaceApp"):
         os.makedirs(log_dir)
 
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG) # Bắt tất cả mọi level lỗi
+    logger.setLevel(logging.DEBUG)
 
     if logger.hasHandlers():
         return logger
 
-    # Format log chi tiết: Thời gian - Tên Module - Mức độ - Nội dung
     formatter = logging.Formatter(
         '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
     )
