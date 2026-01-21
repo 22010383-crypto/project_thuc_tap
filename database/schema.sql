@@ -1,17 +1,42 @@
--- Bảng nhân viên
-CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,        -- Mã nhân viên (VD: NV001)
-    name TEXT NOT NULL,         -- Họ tên
-    class_name TEXT,            
+-- 1. Bảng Sinh viên  
+CREATE TABLE IF NOT EXISTS students (
+    student_id TEXT PRIMARY KEY,    
+    name TEXT NOT NULL,             
+    class_name TEXT NOT NULL,        
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Bảng nhật ký điểm danh
-CREATE TABLE IF NOT EXISTS attendance_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_id TEXT NOT NULL,
-    checkin_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    date_str TEXT NOT NULL,    
-    subject TEXT DEFAULT,
-    FOREIGN KEY(user_id) REFERENCES users(id)
+-- 2. Bảng Phiên học (Quản lý từng buổi điểm danh)
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_name TEXT NOT NULL,     -- Tên môn học 
+    room_name TEXT,                 -- Phòng học 
+    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Thời gian bắt đầu mở cam
+    end_time TIMESTAMP,             -- Thời gian kết thúc 
 );
+
+-- 3. Bảng Nhật ký điểm danh (Kết quả)
+CREATE TABLE IF NOT EXISTS attendance_logs (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,    -- Thuộc phiên
+    student_id TEXT NOT NULL,       -- Sinh viên 
+    checkin_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Thời gian quét
+    
+    -- Trạng thái nhận diện:
+    -- 'Auto': Tự động quét
+    -- 'Manual': Giáo viên tick tay (nếu SV quên thẻ/mặt lỗi)
+    verification_method TEXT DEFAULT 'Auto', 
+    
+    -- Điểm tin cậy (Confidence score của AI)
+    confidence_score REAL,
+    
+    -- Khóa ngoại
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY(student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    
+    -- Ràng buộc này ngăn chặn 1 SV điểm danh 2 lần trong 1 buổi
+    UNIQUE(session_id, student_id)
+);
+
+CREATE INDEX idx_logs_student ON attendance_logs(student_id);
+CREATE INDEX idx_logs_session ON attendance_logs(session_id);
