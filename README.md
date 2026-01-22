@@ -57,7 +57,7 @@ Cơ sở dữ liệu bao gồm ba bảng chính:
 
 ---
 
-## 3. Bảng `students` – Sinh viên
+## 2.1 Bảng `students` – Sinh viên
 
 ### Mô tả
 Bảng `students` dùng để lưu trữ thông tin cơ bản của sinh viên trong hệ thống.
@@ -81,7 +81,69 @@ CREATE TABLE IF NOT EXISTS students (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
-### Hình ảnh bảng
+
+## 2.2 Bảng `sessions` – Phiên học / Buổi điểm danh
+
+### Mô tả
+Bảng `sessions` dùng để quản lý từng buổi học hoặc buổi điểm danh trong hệ thống.  
+Mỗi phiên tương ứng với một lần mở camera để thực hiện nhận diện khuôn mặt sinh viên.
+
+### Cấu trúc bảng
+
+| Tên cột | Kiểu dữ liệu | Mô tả |
+|--------|-------------|------|
+| `session_id` | INTEGER (PK, AUTOINCREMENT) | Mã phiên học |
+| `subject_name` | TEXT | Tên môn học |
+| `room_name` | TEXT | Phòng học |
+| `start_time` | TIMESTAMP | Thời gian bắt đầu mở camera |
+| `end_time` | TIMESTAMP | Thời gian kết thúc phiên |
+
+### Câu lệnh tạo bảng
+
+```sql
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_name TEXT NOT NULL,
+    room_name TEXT,
+    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_time TIMESTAMP
+);
+```
+
+## 2.3 Bảng `attendance_logs` – Điểm danh
+
+### Mô tả
+Bảng `attendance_logs` dùng để lưu trữ kết quả điểm danh của sinh viên trong từng phiên học.  
+Mỗi sinh viên chỉ được điểm danh một lần duy nhất trong một phiên học.
+
+### Cấu trúc bảng
+
+| Tên cột | Kiểu dữ liệu | Mô tả |
+|--------|-------------|------|
+| `log_id` | INTEGER (PK, AUTOINCREMENT) | Mã bản ghi điểm danh |
+| `session_id` | INTEGER (FK) | Mã phiên học |
+| `student_id` | TEXT (FK) | Mã sinh viên |
+| `checkin_time` | TIMESTAMP | Thời gian điểm danh |
+| `verification_method` | TEXT | Phương thức xác thực (`Auto`, `Manual`) |
+| `confidence_score` | REAL | Điểm tin cậy do AI trả về |
+
+### Câu lệnh tạo bảng
+
+```sql
+CREATE TABLE IF NOT EXISTS attendance_logs (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    student_id TEXT NOT NULL,
+    checkin_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verification_method TEXT DEFAULT 'Auto',
+    confidence_score REAL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY(student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    UNIQUE(session_id, student_id)
+);
+```
+
+### Hình ảnh ERD
 
 ![alt text](image.png)
 [Xem ERD trên Mermaid Live](https://mermaid.live/view#pako:eNp9U21PgzAQ_ivkPuMCzrHJt8VVs-jQCCbGkJDa3kZ1tKYtRp377xZmpiLab9fnnrvn3jbAFEeIAfVM0JWmVS4999LsZkaSLPU2O7t5GbnNPGNrjtIWgntX5x1M0go7X2xNjSk6wHxB0my6uPKYRmqRF9Tu0G0uP9OTNJ1fJj_Sz5OMnJFrz6AxQsleBaa-f0Bmix4lWqnqTyHGUm0LK_pRlPwbthc5zTKSzKbJCSkuLs96ta7Vqquzp4zT87-b_AP7alyJ7FHIruKG-4xaLAWjtgleoS0V__K4JtMLjym5FC4-w8Iwpbtl7Uf__n5woDa_yoy9HEpqcuiM6h93l9FSIVsO-LDSgkO8pGuDPlSoK9rY0PYvB1uiKwoaHsclrde2oW0d74nKOzdFiK2uHVOrelXu49RP3O3S5xLvXdzoUJ-oWlqIw7ANAfEGXiAeRsHgeDgejsIgiqIgCo98eIV4NBoE0eHRJJyMw2E4jrY-vLU5g8FkPPIBubBKL3ZH097O9gMAOfZ9)
