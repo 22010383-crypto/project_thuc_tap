@@ -5,9 +5,8 @@ from datetime import datetime
 from app.config import Config
 import logging
 
-# Sử dụng root logger
 logger = logging.getLogger(__name__)
-logger.info("📦 Module db_manager imported")
+logger.info("📦 Module db_manager")
 
 class DatabaseManager:
     def __init__(self):
@@ -15,7 +14,7 @@ class DatabaseManager:
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         os.makedirs(Config.EXPORT_DIR, exist_ok=True)
         self.init_db()
-        logger.info(f"✅ DatabaseManager initialized: {self.db_path}")
+        logger.info(f" DatabaseManager initialized: {self.db_path}")
 
     def get_conn(self):
         conn = sqlite3.connect(self.db_path)
@@ -42,7 +41,7 @@ class DatabaseManager:
                 end_time TIMESTAMP
             );
         """)
-        # 3. Bảng Nhật Ký (Logs) - Có ràng buộc UNIQUE để tránh trùng
+        # 3. Bảng Nhật Ký (Logs)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS attendance_logs (
                 log_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,10 +63,10 @@ class DatabaseManager:
         try:
             conn.execute("INSERT INTO students (student_id, name, class_name) VALUES (?, ?, ?)", (sid, name, cls))
             conn.commit()
-            logger.info(f"✅ Added student: {sid}")
+            logger.info(f"Thêm sinh viên thành công: {sid}")
             return True
         except sqlite3.IntegrityError:
-            logger.warning(f"⚠️ Student {sid} already exists")
+            logger.warning(f"Sinh viên {sid} đã tồn tại")
             return False
         finally:
             conn.close()
@@ -84,10 +83,10 @@ class DatabaseManager:
             conn.execute("DELETE FROM attendance_logs WHERE student_id = ?", (sid,))
             conn.execute("DELETE FROM students WHERE student_id = ?", (sid,))
             conn.commit()
-            logger.info(f"✅ Deleted student: {sid}")
+            logger.info(f" Xóa sinh viên: {sid}")
             return True
         except Exception as e:
-            logger.error(f"❌ Error deleting student {sid}: {e}")
+            logger.error(f"Error deleting student {sid}: {e}")
             return False
         finally:
             conn.close()
@@ -111,7 +110,6 @@ class DatabaseManager:
         conn.commit()
         session_id = cursor.lastrowid
         conn.close()
-        logger.info(f"✅ Created session #{session_id}: {subject}")
         return session_id
 
     def mark_attendance(self, session_id, student_id, method="Auto"):
@@ -123,15 +121,14 @@ class DatabaseManager:
                 (session_id, student_id, method)
             )
             conn.commit()
-            logger.info(f"✅ Attendance marked: Session#{session_id}, Student={student_id}")
+            logger.info(f"Điểm danh thành công: Session#{session_id}, Student={student_id}")
             return True
         except sqlite3.IntegrityError:
-            logger.warning(f"⚠️ Student {student_id} already marked in session #{session_id}")
+            logger.warning(f"Sinh viên {student_id} đã điểm danh phiên #{session_id}")
             return False
         finally:
             conn.close()
     
-    # THÊM ALIAS để tương thích với code cũ
     def log_attendance(self, student_id, method="Auto", session_id=None):
         """
         Alias method cho mark_attendance để tương thích với code cũ.
@@ -147,11 +144,11 @@ class DatabaseManager:
             
             if result:
                 session_id = result[0]
-                logger.debug(f"📌 Using active session #{session_id}")
+                logger.debug(f"Phiên điểm danh #{session_id}")
             else:
                 # Tạo session mới
                 session_id = self.create_session("Auto Attendance")
-                logger.info(f"📌 Created new auto session #{session_id}")
+                logger.info(f"Tạo phiên điểm danh #{session_id}")
         
         return self.mark_attendance(session_id, student_id, method)
             
@@ -160,7 +157,7 @@ class DatabaseManager:
         conn.execute("UPDATE sessions SET end_time = CURRENT_TIMESTAMP WHERE session_id = ?", (session_id,))
         conn.commit()
         conn.close()
-        logger.info(f"🔒 Closed session #{session_id}")
+        logger.info(f"Đóng phiên điểm danh #{session_id}")
 
     def export_excel(self):
         conn = self.get_conn()
@@ -173,12 +170,12 @@ class DatabaseManager:
             ORDER BY l.checkin_time DESC
             """
             df = pd.read_sql_query(query, conn)
-            path = os.path.join(Config.EXPORT_DIR, f"Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            path = os.path.join(Config.EXPORT_DIR, f"Export_attendance_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
             df.to_excel(path, index=False)
-            logger.info(f"📊 Exported to {path}")
+            logger.info(f"Export attendance to {path}")
             return True, path
         except Exception as e:
-            logger.error(f"❌ Export failed: {e}")
+            logger.error(f"Export failed: {e}")
             return False, str(e)
         finally:
             conn.close()
