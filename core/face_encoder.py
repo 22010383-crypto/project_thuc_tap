@@ -1,7 +1,6 @@
 import face_recognition
 import pickle
 import os
-import cv2
 import numpy as np
 from app.config import Config
 
@@ -19,9 +18,9 @@ class FaceEncoder:
                     data = pickle.load(f)
                     self.known_encodings = data.get("encodings", [])
                     self.known_ids = data.get("ids", [])
-                print(f"✅ Đã load {len(self.known_encodings)} khuôn mặt vào bộ nhớ.")
+                print(f"Đã load {len(self.known_encodings)} khuôn mặt vào bộ nhớ.")
             except Exception as e:
-                print(f"⚠️ Lỗi đọc file encoding: {e}")
+                print(f"Lỗi đọc file encoding: {e}")
                 self.known_encodings = []
                 self.known_ids = []
     def is_face_registered(self, encoding):
@@ -51,7 +50,7 @@ class FaceEncoder:
         os.makedirs(os.path.dirname(Config.ENCODINGS_PATH), exist_ok=True)
         with open(Config.ENCODINGS_PATH, "wb") as f:
             pickle.dump(data, f)
-        print("💾 Đã lưu dữ liệu Vector xuống ổ cứng.")
+        print("Đã lưu dữ liệu Vector xuống ổ cứng.")
 
     def encode(self, frame, face_locations):
         """
@@ -65,7 +64,7 @@ class FaceEncoder:
             encodings = face_recognition.face_encodings(rgb_frame, face_locations, num_jitters=1)
             return encodings
         except Exception as e:
-            print(f"❌ Lỗi khi encode: {e}")
+            print(f"Lỗi khi encode: {e}")
             return []
 
     def add_face(self, frame, user_id):
@@ -101,7 +100,6 @@ class FaceEncoder:
     def remove_encoding(self, user_id):
         # Lọc bỏ các vector của user_id này (dùng list comprehension)
         # Lưu ý: 1 user có thể có nhiều ảnh mẫu nếu bạn nâng cấp sau này
-        # Ở đây giả sử 1 user 1 vector
         indices_to_keep = [i for i, uid in enumerate(self.known_ids) if uid != user_id]
         
         self.known_encodings = [self.known_encodings[i] for i in indices_to_keep]
