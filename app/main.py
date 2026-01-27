@@ -66,7 +66,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
-    logger.critical("Uncaught Exception (System Level):", exc_info=(exc_type, exc_value, exc_traceback))
+    logger.critical("Exception (System Level):", exc_info=(exc_type, exc_value, exc_traceback))
     
     try:
         root = tk.Tk()
