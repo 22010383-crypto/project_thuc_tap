@@ -43,7 +43,7 @@ Hệ thống yêu cầu một file model đã được train sẵn để phát h
 ---
 
 🔹 Linux / macOS
-python3.10 -m venv venv
+python3.10 -m venv venv || python3 -m venv venv
 source venv/bin/activate
 
 🔹 Windows (PowerShell)
@@ -60,3 +60,6 @@ pip install --upgrade pip setuptools wheel
 
 Cài thư viện từ requirements.txt
 pip install -r requirements.txt
+
+
+python -m app.main
