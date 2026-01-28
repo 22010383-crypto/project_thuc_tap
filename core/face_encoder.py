@@ -35,32 +35,32 @@ class FaceEncoder:
         except Exception as e:
             print(f"[ERROR] Save failed: {e}")
 
-    def _safe_convert_image(self, frame):
+    def _force_cleanup(self, frame):
         """
-        Hàm 'Lọc sạch' ảnh đầu vào để chạy được trên mọi OS (Mac/Win/Linux).
-        Loại bỏ kênh Alpha, ép kiểu uint8, sắp xếp bộ nhớ liên tục.
+        Hàm này phá hủy cấu trúc bộ nhớ cũ và xây lại từ đầu.
+        Bắt buộc dlib phải chấp nhận ảnh này.
         """
-        if frame is None: return None, None
+        if frame is None: return None
         
-        # 1. Đảm bảo là mảng numpy
+        # 1. Đảm bảo input là numpy array
         img = np.array(frame)
-
-        # 2. Xử lý kênh Alpha (Mac webcam hay trả về 4 kênh)
+        
+        # 2. Xử lý kênh Alpha (Mac webcam hay trả về 4 kênh BGRA)
         if len(img.shape) == 3 and img.shape[2] == 4:
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+            
+        # 3. Chuyển BGR -> RGB (Face_recognition cần RGB)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # 3. Ép kiểu uint8 (Bắt buộc cho dlib C++)
-        if img.dtype != np.uint8:
-            img = img.astype(np.uint8)
-
-        # 4. Tạo bản copy bộ nhớ liên tục (Fix lỗi "Unsupported image type" trên Mac)
-        # Đây là bước quan trọng nhất!
-        rgb_frame = np.ascontiguousarray(img[:, :, ::-1]) # BGR to RGB
+        # 4. NUCLEAR OPTION: Tạo một mảng hoàn toàn mới, ép kiểu uint8, ép bộ nhớ C-Style
+        # order='C' là chìa khóa để fix lỗi stride trên Mac
+        clean_frame = np.array(img_rgb, dtype=np.uint8, copy=True, order='C')
         
-        # Tạo bản ảnh xám để detect (nhanh hơn & an toàn hơn)
-        gray_frame = np.ascontiguousarray(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
-        
-        return rgb_frame, gray_frame
+        # Kiểm tra lần cuối
+        if not clean_frame.flags['C_CONTIGUOUS']:
+            clean_frame = np.ascontiguousarray(clean_frame, dtype=np.uint8)
+            
+        return clean_frame
 
     def is_face_registered(self, encoding):
         if not self.known_encodings: return False, None
@@ -73,23 +73,25 @@ class FaceEncoder:
         return False, None
 
     def add_face(self, frame, user_id):
-        # --- BƯỚC 1: LÀM SẠCH ẢNH ---
-        rgb_frame, gray_frame = self._safe_convert_image(frame)
-        if rgb_frame is None: return False, "Ảnh lỗi/None"
+        # --- BƯỚC 1: CLEAN UP ẢNH ---
+        rgb_frame = self._force_cleanup(frame)
+        if rgb_frame is None: return False, "Ảnh lỗi"
 
         try:
-            # --- BƯỚC 2: DETECT (Ưu tiên ảnh xám cho nhẹ) ---
-            # Dùng ảnh xám (2D) để detect giúp tránh lỗi bộ nhớ 3D trên Mac
-            boxes = face_recognition.face_locations(gray_frame, model=Config.DETECTION_MODEL)
+            # --- BƯỚC 2: DETECT ---
+            # Thử detect trực tiếp trên ảnh màu đã làm sạch
+            boxes = face_recognition.face_locations(rgb_frame, model=Config.DETECTION_MODEL)
             
-            # Fallback: Nếu ảnh xám không ra, thử lại bằng ảnh màu
+            # Nếu thất bại, thử convert sang Gray rồi detect (Fallback)
             if not boxes:
-                boxes = face_recognition.face_locations(rgb_frame, model=Config.DETECTION_MODEL)
+                gray = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2GRAY)
+                boxes = face_recognition.face_locations(gray, model=Config.DETECTION_MODEL)
 
-            if not boxes: return False, "Không thấy mặt (Hãy đứng gần hơn)"
+            if not boxes: return False, "Không thấy mặt (Đứng gần/Sáng hơn)"
             if len(boxes) > 1: return False, "Nhiều người quá (Chỉ đứng 1 mình)"
 
-            # --- BƯỚC 3: ENCODE (Bắt buộc dùng ảnh màu) ---
+            # --- BƯỚC 3: ENCODE ---
+            # Lưu ý: Encode luôn cần ảnh màu
             encodings = face_recognition.face_encodings(rgb_frame, boxes, num_jitters=1)
             
             if not encodings: return False, "Ảnh mờ/Lỗi encode"
@@ -103,22 +105,26 @@ class FaceEncoder:
                     idx = self.known_ids.index(user_id)
                     self.known_encodings[idx] = new_encoding
                     self.save_database()
-                    return True, "Cập nhật ảnh mới thành công"
-                return False, f"Đã trùng với ID: {dup_id}"
+                    return True, "Cập nhật thành công"
+                return False, f"Trùng với ID: {dup_id}"
 
             self.known_encodings.append(new_encoding)
             self.known_ids.append(user_id)
             self.save_database()
             return True, "Đăng ký thành công"
 
+        except RuntimeError as re:
+            # Nếu vẫn lỗi, in thông số ra để kiểm tra
+            print(f"[CRITICAL ERROR] Dlib Image Rejection: {re}")
+            print(f"Stats: Shape={rgb_frame.shape}, Dtype={rgb_frame.dtype}, C-Contiguous={rgb_frame.flags['C_CONTIGUOUS']}")
+            return False, "Lỗi tương thích hệ thống (Xem log)"
         except Exception as e:
-            # In lỗi chi tiết ra terminal để debug
-            print(f"[FATAL ERROR] Add Face: {e}")
-            return False, "Lỗi hệ thống (Xem log)"
+            print(f"[ERROR] Add Face General: {e}")
+            return False, str(e)
 
     def encode(self, frame, face_locations):
-        # Hàm dùng cho luồng điểm danh (Attendance)
-        rgb_frame, _ = self._safe_convert_image(frame)
+        # Dùng cho luồng điểm danh
+        rgb_frame = self._force_cleanup(frame)
         if rgb_frame is None: return []
         try:
             return face_recognition.face_encodings(rgb_frame, face_locations, num_jitters=1)
