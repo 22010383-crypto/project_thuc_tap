@@ -64,8 +64,8 @@ exports/*.xlsx
 exports/*.xls
 exports/*.csv
 
-models/*.dat
-models/*.bz2
+# models/*.dat
+# models/*.bz2
 
 .env
 .env.local
