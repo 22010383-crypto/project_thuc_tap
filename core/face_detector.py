@@ -4,7 +4,7 @@ from app.config import Config
 
 class FaceDetector:
     def __init__(self):
-        self.model = Config.DETECTION_MODEL 
+        self.model = Config.DETECTION_MODEL  # 'hog'
         self.scale = Config.RESIZE_SCALE
 
     def detect(self, frame):

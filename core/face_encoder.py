@@ -1,6 +1,7 @@
 import face_recognition
 import pickle
 import os
+import cv2
 import numpy as np
 from app.config import Config
 
@@ -50,7 +51,7 @@ class FaceEncoder:
         os.makedirs(os.path.dirname(Config.ENCODINGS_PATH), exist_ok=True)
         with open(Config.ENCODINGS_PATH, "wb") as f:
             pickle.dump(data, f)
-        print("Đã lưu dữ liệu Vector xuống ổ cứng.")
+        print("💾 Đã lưu dữ liệu Vector xuống ổ cứng.")
 
     def encode(self, frame, face_locations):
         """
@@ -64,7 +65,7 @@ class FaceEncoder:
             encodings = face_recognition.face_encodings(rgb_frame, face_locations, num_jitters=1)
             return encodings
         except Exception as e:
-            print(f"Lỗi khi encode: {e}")
+            print(f"❌ Lỗi khi encode: {e}")
             return []
 
     def add_face(self, frame, user_id):
@@ -98,11 +99,20 @@ class FaceEncoder:
             return False, str(e)
     
     def remove_encoding(self, user_id):
-        # Lọc bỏ các vector của user_id này (dùng list comprehension)
-        # Lưu ý: 1 user có thể có nhiều ảnh mẫu nếu bạn nâng cấp sau này
-        indices_to_keep = [i for i, uid in enumerate(self.known_ids) if uid != user_id]
+        """Xóa vector khuôn mặt của user_id khỏi bộ nhớ và file"""
+        # Tạo danh sách mới chỉ giữ lại những người KHÔNG phải user_id này
+        indices_to_keep = []
+        for i, uid in enumerate(self.known_ids):
+            if uid != user_id:
+                indices_to_keep.append(i)
         
+        if len(indices_to_keep) == len(self.known_ids):
+            return # Không tìm thấy để xóa
+            
+        # Cập nhật lại list
         self.known_encodings = [self.known_encodings[i] for i in indices_to_keep]
         self.known_ids = [self.known_ids[i] for i in indices_to_keep]
         
+        # Lưu xuống file ngay lập tức
         self.save_database()
+        print(f"🗑️ Đã xóa vector khuôn mặt của: {user_id}")
