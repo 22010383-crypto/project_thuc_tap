@@ -35,32 +35,41 @@ class FaceEncoder:
         except Exception as e:
             print(f"[ERROR] Save failed: {e}")
 
-    def _force_cleanup(self, frame):
+    def _prepare_image_robust(self, frame):
         """
-        Hàm này phá hủy cấu trúc bộ nhớ cũ và xây lại từ đầu.
-        Bắt buộc dlib phải chấp nhận ảnh này.
+        Chuẩn hóa ảnh thành 2 phiên bản:
+        1. Gray (2D): Để detect mặt (Tránh lỗi stride trên Mac)
+        2. RGB (3D): Để encode đặc điểm
         """
-        if frame is None: return None
+        if frame is None: return None, None
         
-        # 1. Đảm bảo input là numpy array
-        img = np.array(frame)
-        
-        # 2. Xử lý kênh Alpha (Mac webcam hay trả về 4 kênh BGRA)
-        if len(img.shape) == 3 and img.shape[2] == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        # 1. Ép kiểu dữ liệu an toàn tuyệt đối
+        try:
+            # Copy dữ liệu ra vùng nhớ mới để ngắt kết nối với buffer của camera
+            img = np.array(frame, copy=True)
             
-        # 3. Chuyển BGR -> RGB (Face_recognition cần RGB)
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
-        # 4. NUCLEAR OPTION: Tạo một mảng hoàn toàn mới, ép kiểu uint8, ép bộ nhớ C-Style
-        # order='C' là chìa khóa để fix lỗi stride trên Mac
-        clean_frame = np.array(img_rgb, dtype=np.uint8, copy=True, order='C')
-        
-        # Kiểm tra lần cuối
-        if not clean_frame.flags['C_CONTIGUOUS']:
-            clean_frame = np.ascontiguousarray(clean_frame, dtype=np.uint8)
+            # Xử lý kênh Alpha (nếu có)
+            if img.shape[-1] == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+                
+            # Ép về uint8
+            if img.dtype != 'uint8':
+                img = img.astype('uint8')
+
+            # 2. Tạo ảnh Xám (Gray) - 2D Array
+            # Dlib detect trên ảnh này cực nhanh và không lỗi format
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray = np.ascontiguousarray(gray)
+
+            # 3. Tạo ảnh Màu (RGB) - 3D Array
+            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            rgb = np.ascontiguousarray(rgb)
             
-        return clean_frame
+            return rgb, gray
+            
+        except Exception as e:
+            print(f"[PREPARE ERROR] {e}")
+            return None, None
 
     def is_face_registered(self, encoding):
         if not self.known_encodings: return False, None
@@ -73,58 +82,74 @@ class FaceEncoder:
         return False, None
 
     def add_face(self, frame, user_id):
-        # --- BƯỚC 1: CLEAN UP ẢNH ---
-        rgb_frame = self._force_cleanup(frame)
-        if rgb_frame is None: return False, "Ảnh lỗi"
+        # Bước 1: Chuẩn bị 2 phiên bản ảnh
+        rgb_frame, gray_frame = self._prepare_image_robust(frame)
+        if rgb_frame is None: return False, "Ảnh hỏng/Lỗi camera"
 
         try:
-            # --- BƯỚC 2: DETECT ---
-            # Thử detect trực tiếp trên ảnh màu đã làm sạch
-            boxes = face_recognition.face_locations(rgb_frame, model=Config.DETECTION_MODEL)
+            # Bước 2: DETECT TRÊN ẢNH XÁM (Quan trọng)
+            # Thay vì đưa RGB vào (hay lỗi), ta đưa Gray vào.
+            # face_recognition hỗ trợ detect trên ảnh xám.
+            boxes = face_recognition.face_locations(gray_frame, model=Config.DETECTION_MODEL)
             
-            # Nếu thất bại, thử convert sang Gray rồi detect (Fallback)
             if not boxes:
-                gray = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2GRAY)
-                boxes = face_recognition.face_locations(gray, model=Config.DETECTION_MODEL)
+                return False, "Không tìm thấy khuôn mặt (Thử đứng nơi sáng hơn)"
+            
+            if len(boxes) > 1:
+                return False, "Phát hiện nhiều người. Vui lòng đứng 1 mình!"
 
-            if not boxes: return False, "Không thấy mặt (Đứng gần/Sáng hơn)"
-            if len(boxes) > 1: return False, "Nhiều người quá (Chỉ đứng 1 mình)"
-
-            # --- BƯỚC 3: ENCODE ---
-            # Lưu ý: Encode luôn cần ảnh màu
+            # Bước 3: ENCODE TRÊN ẢNH MÀU
+            # Lúc này đã có tọa độ (boxes) từ ảnh xám, ta áp nó vào ảnh màu để lấy đặc điểm
             encodings = face_recognition.face_encodings(rgb_frame, boxes, num_jitters=1)
             
-            if not encodings: return False, "Ảnh mờ/Lỗi encode"
+            if not encodings:
+                return False, "Ảnh mờ, không thể mã hóa khuôn mặt."
             
             new_encoding = encodings[0]
             
-            # --- BƯỚC 4: LƯU ---
+            # Bước 4: Check trùng & Lưu
             is_dup, dup_id = self.is_face_registered(new_encoding)
             if is_dup:
                 if dup_id == user_id: 
+                    # Update lại
                     idx = self.known_ids.index(user_id)
                     self.known_encodings[idx] = new_encoding
                     self.save_database()
-                    return True, "Cập nhật thành công"
-                return False, f"Trùng với ID: {dup_id}"
+                    return True, "Cập nhật dữ liệu thành công"
+                return False, f"Khuôn mặt này đã thuộc về: {dup_id}"
 
             self.known_encodings.append(new_encoding)
             self.known_ids.append(user_id)
             self.save_database()
-            return True, "Đăng ký thành công"
+            return True, "Đăng ký thành công!"
 
         except RuntimeError as re:
-            # Nếu vẫn lỗi, in thông số ra để kiểm tra
-            print(f"[CRITICAL ERROR] Dlib Image Rejection: {re}")
-            print(f"Stats: Shape={rgb_frame.shape}, Dtype={rgb_frame.dtype}, C-Contiguous={rgb_frame.flags['C_CONTIGUOUS']}")
-            return False, "Lỗi tương thích hệ thống (Xem log)"
+            # Nếu vẫn lỗi, ta thử fallback cuối cùng: Encode trên ảnh xám (ít chính xác hơn nhưng không lỗi)
+            print(f"[RETRY] Dlib Error on RGB: {re}. Trying Gray encoding...")
+            try:
+                # Fallback: Detect Gray -> Encode Gray (Chấp nhận giảm độ chính xác chút xíu để không crash)
+                boxes = face_recognition.face_locations(gray_frame, model=Config.DETECTION_MODEL)
+                # Convert gray back to fake RGB for encoding
+                fake_rgb = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2RGB)
+                encodings = face_recognition.face_encodings(fake_rgb, boxes)
+                if encodings:
+                    new_encoding = encodings[0]
+                    self.known_encodings.append(new_encoding)
+                    self.known_ids.append(user_id)
+                    self.save_database()
+                    return True, "Đăng ký thành công (Chế độ Grayscale)"
+            except Exception as e2:
+                return False, f"Lỗi hệ thống nghiêm trọng: {e2}"
+                
+            return False, "Lỗi không xác định."
+
         except Exception as e:
             print(f"[ERROR] Add Face General: {e}")
-            return False, str(e)
+            return False, f"Lỗi: {str(e)}"
 
     def encode(self, frame, face_locations):
         # Dùng cho luồng điểm danh
-        rgb_frame = self._force_cleanup(frame)
+        rgb_frame, _ = self._prepare_image_robust(frame)
         if rgb_frame is None: return []
         try:
             return face_recognition.face_encodings(rgb_frame, face_locations, num_jitters=1)
