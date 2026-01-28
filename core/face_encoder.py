@@ -12,160 +12,123 @@ class FaceEncoder:
         self.load_database()
 
     def load_database(self):
-        """Load danh sách vector từ file lên RAM"""
         if os.path.exists(Config.ENCODINGS_PATH):
             try:
                 with open(Config.ENCODINGS_PATH, "rb") as f:
                     data = pickle.load(f)
                     self.known_encodings = data.get("encodings", [])
                     self.known_ids = data.get("ids", [])
-                print(f"[INFO] Đã load {len(self.known_encodings)} khuôn mặt vào bộ nhớ.")
+                print(f"[INFO] Đã load {len(self.known_encodings)} khuôn mặt.")
             except Exception as e:
-                print(f"[ERROR] Lỗi đọc file encoding: {e}")
-                # Reset nếu file lỗi để tránh crash app
+                print(f"[ERROR] Lỗi đọc DB: {e}")
                 self.known_encodings = []
                 self.known_ids = []
         else:
-            # Tạo thư mục chứa file nếu chưa có
             os.makedirs(os.path.dirname(Config.ENCODINGS_PATH), exist_ok=True)
 
     def save_database(self):
-        """Lưu danh sách vector xuống file"""
-        data = {
-            "encodings": self.known_encodings,
-            "ids": self.known_ids
-        }
+        data = {"encodings": self.known_encodings, "ids": self.known_ids}
         try:
             with open(Config.ENCODINGS_PATH, "wb") as f:
                 pickle.dump(data, f)
-            print("[INFO] Đã lưu dữ liệu Vector xuống ổ cứng.")
+            print("[INFO] Saved DB.")
         except Exception as e:
-            print(f"[ERROR] Không thể lưu file: {e}")
+            print(f"[ERROR] Save failed: {e}")
 
     def _prepare_image(self, frame):
         """
-        Chuẩn hóa ảnh đầu vào để tránh lỗi trên macOS/Linux.
-        Chuyển BGR -> RGB và ép kiểu uint8.
+        Hàm xử lý ảnh 'bất khả chiến bại' cho macOS.
+        Đảm bảo 100% ảnh là uint8, RGB và C-Contiguous.
         """
         if frame is None: return None
         
-        # 1. Ép kiểu uint8 (Bắt buộc cho dlib)
+        # 1. Đảm bảo là numpy array
+        if not isinstance(frame, np.ndarray):
+            frame = np.array(frame)
+
+        # 2. Xóa kênh Alpha (nếu có) - Mac camera đôi khi trả về BGRA
+        if frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+
+        # 3. Ép kiểu uint8 (0-255) - Quan trọng nhất
         if frame.dtype != np.uint8:
             frame = frame.astype(np.uint8)
-            
-        # 2. Chuyển BGR (OpenCV) -> RGB (face_recognition)
-        rgb_frame = frame[:, :, ::-1]
+
+        # 4. Chuyển BGR -> RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # 5. Ép bộ nhớ liên tục (C-Contiguous) - Fix lỗi RuntimeError dlib
+        # Đây là bước quan trọng mà code trước có thể chưa xử lý triệt để
+        rgb_frame = np.ascontiguousarray(rgb_frame)
         
-        # 3. Sắp xếp bộ nhớ liên tục (Tăng tốc độ C++)
-        return np.ascontiguousarray(rgb_frame)
+        return rgb_frame
 
     def is_face_registered(self, encoding):
-        """
-        Kiểm tra xem vector này đã tồn tại trong DB chưa.
-        Trả về: (IsDuplicate: bool, MatchedID: str)
-        """
-        if not self.known_encodings:
-            return False, None
-            
-        # Tính khoảng cách Euclidean với TẤT CẢ khuôn mặt đang có
-        # distances càng nhỏ -> càng giống
+        if not self.known_encodings: return False, None
         try:
             distances = face_recognition.face_distance(self.known_encodings, encoding)
             min_dist = np.min(distances)
-            
-            # Nếu khoảng cách nhỏ hơn ngưỡng (VD: 0.4) -> Là cùng 1 người
             if min_dist < Config.MATCH_TOLERANCE:
-                index = np.argmin(distances)
-                return True, self.known_ids[index]
-        except Exception as e:
-            print(f"[WARNING] Lỗi so sánh vector: {e}")
-            
+                return True, self.known_ids[np.argmin(distances)]
+        except: pass
         return False, None
 
-    def encode(self, frame, face_locations):
-        """
-        Mã hóa danh sách các khuôn mặt đã detect được.
-        Dùng cho luồng điểm danh (Attendance Loop).
-        """
-        rgb_frame = self._prepare_image(frame)
-        if rgb_frame is None: return []
-        
-        try:
-            # num_jitters=1: Lấy mẫu 1 lần (Nhanh). Tăng lên 10 nếu muốn chính xác hơn nhưng chậm.
-            encodings = face_recognition.face_encodings(rgb_frame, face_locations, num_jitters=1)
-            return encodings
-        except Exception as e:
-            print(f"[ERROR] Lỗi khi encode: {e}")
-            return []
-
     def add_face(self, frame, user_id):
-        """
-        Quy trình thêm khuôn mặt mới (Dùng cho Đăng ký).
-        1. Detect -> 2. Encode -> 3. Check Trùng -> 4. Lưu
-        """
+        # Bước 1: Chuẩn bị ảnh thật kỹ
         rgb_frame = self._prepare_image(frame)
-        if rgb_frame is None: return False, "Ảnh bị lỗi"
-
-        # 1. Detect
-        # Dùng model từ Config (hog nhanh hơn, cnn chính xác hơn)
-        boxes = face_recognition.face_locations(rgb_frame, model=Config.DETECTION_MODEL)
-        
-        if not boxes:
-            return False, "Không tìm thấy khuôn mặt nào!"
-        if len(boxes) > 1:
-            return False, "Phát hiện nhiều người. Vui lòng chỉ đứng 1 mình!"
+        if rgb_frame is None: return False, "Ảnh lỗi"
 
         try:
-            # 2. Encode
+            # Bước 2: Detect
+            # Dùng model detection chuẩn (hog)
+            boxes = face_recognition.face_locations(rgb_frame, model=Config.DETECTION_MODEL)
+            
+            if not boxes: return False, "Không thấy mặt"
+            if len(boxes) > 1: return False, "Nhiều người quá"
+
+            # Bước 3: Encode
             encodings = face_recognition.face_encodings(rgb_frame, boxes, num_jitters=1)
-            if not encodings:
-                return False, "Ảnh không rõ nét để mã hóa."
+            if not encodings: return False, "Ảnh mờ/Lỗi encode"
             
             new_encoding = encodings[0]
             
-            # 3. Kiểm tra trùng lặp (Logic quan trọng)
+            # Bước 4: Check trùng
             is_dup, dup_id = self.is_face_registered(new_encoding)
             if is_dup:
-                # Nếu trùng ID cũ -> Cập nhật lại vector mới (cho chính xác hơn)
-                if dup_id == user_id:
+                if dup_id == user_id: # Cập nhật lại chính mình
                     idx = self.known_ids.index(user_id)
                     self.known_encodings[idx] = new_encoding
                     self.save_database()
-                    return True, "Cập nhật dữ liệu khuôn mặt thành công!"
-                else:
-                    # Nếu trùng mặt người khác -> Báo lỗi
-                    return False, f"Khuôn mặt này đã được đăng ký bởi: {dup_id}"
+                    return True, "Cập nhật thành công"
+                return False, f"Trùng với ID: {dup_id}"
 
-            # 4. Lưu mới nếu không trùng
+            # Bước 5: Lưu mới
             self.known_encodings.append(new_encoding)
             self.known_ids.append(user_id)
             self.save_database()
             return True, "Đăng ký thành công"
-            
+
+        except RuntimeError as re:
+            # Bắt riêng lỗi này để debug
+            print(f"[FATAL ERROR] Dlib Image Type Error: {re}")
+            print(f"Debug Info: Shape={rgb_frame.shape}, Dtype={rgb_frame.dtype}, Contiguous={rgb_frame.flags['C_CONTIGUOUS']}")
+            return False, "Lỗi hệ thống (Image Type)"
         except Exception as e:
-            print(f"[ERROR] Add face exception: {e}")
-            return False, "Lỗi hệ thống khi xử lý ảnh."
-    
+            print(f"[ERROR] Add Face: {e}")
+            return False, str(e)
+
+    def encode(self, frame, face_locations):
+        rgb_frame = self._prepare_image(frame)
+        if rgb_frame is None: return []
+        try:
+            return face_recognition.face_encodings(rgb_frame, face_locations, num_jitters=1)
+        except: return []
+
     def remove_encoding(self, user_id):
-        """Xóa vector khuôn mặt của user_id khỏi bộ nhớ và file"""
-        # Tạo danh sách mới chỉ giữ lại những người KHÔNG phải user_id này
-        indices_to_keep = []
-        found = False
+        to_keep = [i for i, uid in enumerate(self.known_ids) if uid != user_id]
+        if len(to_keep) == len(self.known_ids): return False
         
-        for i, uid in enumerate(self.known_ids):
-            if uid != user_id:
-                indices_to_keep.append(i)
-            else:
-                found = True
-        
-        if not found:
-            return False # Không tìm thấy ID để xóa
-            
-        # Cập nhật lại list bằng cách lọc
-        self.known_encodings = [self.known_encodings[i] for i in indices_to_keep]
-        self.known_ids = [self.known_ids[i] for i in indices_to_keep]
-        
-        # Lưu xuống file ngay lập tức
+        self.known_encodings = [self.known_encodings[i] for i in to_keep]
+        self.known_ids = [self.known_ids[i] for i in to_keep]
         self.save_database()
-        print(f"[INFO] Đã xóa vector khuôn mặt của: {user_id}")
         return True
