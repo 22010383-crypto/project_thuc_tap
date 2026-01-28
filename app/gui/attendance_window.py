@@ -10,6 +10,7 @@ from database.db_manager import DatabaseManager
 from core.face_detector import FaceDetector
 from core.face_encoder import FaceEncoder
 from core.face_matcher import FaceMatcher
+from core.liveness_detector import ActionLivenessDetector
 from utils.video_stream import VideoStream
 from utils.image_utils import cv2_to_pil
 import logging
