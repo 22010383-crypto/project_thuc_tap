@@ -227,12 +227,74 @@ CREATE TABLE IF NOT EXISTS users (
 );
 ```
 
+## Bảng `sessions` – Phiên học / Buổi điểm danh
+ 
+### Cấu trúc bảng
+
+| Tên cột | Kiểu dữ liệu | Mô tả |
+|--------|-------------|------|
+| `session_id` | INTEGER (PK, AUTOINCREMENT) | Mã phiên học |
+| `subject_name` | TEXT | Tên môn học |
+| `room_name` | TEXT | Phòng học |
+| `start_time` | TIMESTAMP | Thời gian bắt đầu mở camera |
+| `end_time` | TIMESTAMP | Thời gian kết thúc phiên |
+
+### Câu lệnh tạo bảng
+
+```sql
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_name TEXT NOT NULL,
+    room_name TEXT,
+    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_time TIMESTAMP
+);
+```
+
+## Bảng `attendance_logs` – Điểm danh
+
+### Cấu trúc bảng
+
+| Tên cột | Kiểu dữ liệu | Mô tả |
+|--------|-------------|------|
+| `log_id` | INTEGER (PK, AUTOINCREMENT) | Mã bản ghi điểm danh |
+| `session_id` | INTEGER (FK) | Mã phiên học |
+| `student_id` | TEXT (FK) | Mã sinh viên |
+| `checkin_time` | TIMESTAMP | Thời gian điểm danh |
+| `verification_method` | TEXT | Phương thức xác thực (`Auto`, `Manual`) |
+| `confidence_score` | REAL | Điểm tin cậy do AI trả về |
+
+### Câu lệnh tạo bảng
+
+```sql
+CREATE TABLE IF NOT EXISTS attendance_logs (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    student_id TEXT NOT NULL,
+    checkin_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verification_method TEXT DEFAULT 'Auto',
+    confidence_score REAL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY(student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    UNIQUE(session_id, student_id)
+);
+```
+
 ---
 
-# 3. Kết quả & Khó khăn
+# 3. Tiền xử lý dữ liệu (Data Preprocessing)
+
+Đọc và chuẩn hóa ảnh:
+Sử dụng cv2.imread để đọc ảnh đầu vào.
+Chuyển đổi không gian màu từ BGR (OpenCV mặc định) sang RGB (yêu cầu của thư viện face_recognition).
+
+Mã hóa khuôn mặt (Encoding):
+Sử dụng thư viện face_recognition (dựa trên dlib) để trích xuất 128 đặc trưng (128-d embeddings) của khuôn mặt.
+Xử lý ngoại lệ: Bỏ qua các ảnh không tìm thấy khuôn mặt hoặc có nhiều hơn 1 khuôn mặt.
+
+# 4. Kết quả & Khó khăn
 
 ## Kết quả
-
 - [x] Hoàn thành khung dự án
 - [x] Tạo CSDL attendance.db
 - [x] Mã hóa khuôn mặt thành công
