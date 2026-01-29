@@ -3,15 +3,26 @@ from tkinter import messagebox
 import sys
 import traceback
 import logging
+import platform # Để check hệ điều hành
 
 # QUAN TRỌNG: Setup logging TRƯỚC KHI import bất kỳ module nào
 from utils.logger import setup_all_loggers
 setup_all_loggers()
 
-# Bây giờ mới import các module khác
+# Import các màn hình con
 from app.gui.register_window import RegisterWindow
 from app.gui.attendance_window import AttendanceWindow
 from app.gui.user_management_window import UserManagementWindow
+
+# --- CẤU HÌNH GIAO DIỆN ĐA NỀN TẢNG ---
+# Kiểm tra xem có phải macOS không
+IS_MACOS = sys.platform.startswith("darwin")
+if IS_MACOS:
+    try:
+        from tkmacosx import Button as MacButton
+    except ImportError:
+        print("⚠️ Cảnh báo: Chưa cài tkmacosx. Giao diện trên Mac có thể bị lỗi màu.")
+        IS_MACOS = False
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +30,17 @@ class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("FACE ATTENDANCE SYSTEM PRO")
-        self.geometry("800x500")
+        
+        # Cấu hình kích thước và căn giữa
+        w, h = 800, 550
+        self.geometry(f"{w}x{h}")
+        self.center_window(w, h)
+        
         self.configure(bg="#2c3e50")
         self.resizable(False, False)
         
         logger.info("="*60)
-        logger.info("🚀 MAIN APP STARTED")
+        logger.info(f"🚀 MAIN APP STARTED on {platform.system()} {platform.release()}")
         logger.info("="*60)
         
         # --- PHÍM TẮT HỆ THỐNG ---
@@ -33,76 +49,86 @@ class MainApp(tk.Tk):
         
         self.report_callback_exception = self.show_error
         
-        # UI Header
+        self.create_ui()
+        logger.info("✅ Main window initialized")
+
+    def center_window(self, w, h):
+        """Hàm căn giữa cửa sổ ứng dụng"""
+        ws = self.winfo_screenwidth()
+        hs = self.winfo_screenheight()
+        x = (ws/2) - (w/2)
+        y = (hs/2) - (h/2)
+        self.geometry('%dx%d+%d+%d' % (w, h, x, y))
+
+    def create_ui(self):
+        # Header
         tk.Label(
             self, 
             text="HỆ THỐNG ĐIỂM DANH AI", 
             font=("Segoe UI", 28, "bold"), 
             bg="#2c3e50", 
             fg="white"
-        ).pack(pady=50)
+        ).pack(pady=(40, 30))
         
         btn_frame = tk.Frame(self, bg="#2c3e50")
         btn_frame.pack(pady=10)
         
-        btn_style = {
-            "font": ("Segoe UI", 14), 
-            "width": 25, 
-            "fg": "white", 
-            "relief": tk.FLAT, 
-            "cursor": "hand2"
-        }
+        # --- Helper tạo nút thông minh (Tự thích ứng OS) ---
+        def create_btn(text, cmd, color):
+            # Cấu hình chung
+            opts = {
+                "text": text, 
+                "command": cmd, 
+                "bg": color, 
+                "fg": "white",
+                "font": ("Segoe UI", 14, "bold"),
+                "cursor": "hand2"
+            }
+            
+            if IS_MACOS:
+                # Cấu hình riêng cho Mac (Dùng tkmacosx)
+                # Mac dùng pixel cho width, cần borderless để hiện màu
+                return MacButton(
+                    btn_frame, 
+                    height=50, 
+                    width=280, 
+                    borderless=True, 
+                    activebackground=color,
+                    **opts
+                )
+            else:
+                # Cấu hình riêng cho Windows/Linux (Dùng tk chuẩn)
+                # Windows dùng text units cho width
+                return tk.Button(
+                    btn_frame, 
+                    width=25, 
+                    relief=tk.FLAT, 
+                    activebackground="#34495e", 
+                    activeforeground="white",
+                    **opts
+                )
 
-        tk.Button(
-            btn_frame, 
-            text="👤 ĐĂNG KÝ MỚI", 
-            command=self.open_register, 
-            bg="#3498db", 
-            **btn_style
-        ).pack(pady=10)
+        # Tạo các nút
+        create_btn("👤 ĐĂNG KÝ MỚI", self.open_register, "#3498db").pack(pady=10)
+        create_btn("📋 QUẢN LÝ SINH VIÊN", self.open_management, "#e67e22").pack(pady=10)
+        create_btn("📷 BẮT ĐẦU ĐIỂM DANH", self.open_attendance, "#27ae60").pack(pady=10)
+        create_btn("❌ THOÁT", self.quit_app, "#c0392b").pack(pady=10)
         
-        tk.Button(
-            btn_frame, 
-            text="📋 QUẢN LÝ SINH VIÊN", 
-            command=self.open_management, 
-            bg="#e67e22", 
-            **btn_style
-        ).pack(pady=10)
-        
-        tk.Button(
-            btn_frame, 
-            text="📷 BẮT ĐẦU ĐIỂM DANH", 
-            command=self.open_attendance, 
-            bg="#27ae60", 
-            **btn_style
-        ).pack(pady=10)
-        
-        tk.Button(
-            btn_frame, 
-            text="❌ THOÁT", 
-            command=self.quit_app, 
-            bg="#c0392b", 
-            **btn_style
-        ).pack(pady=10)
-        
-        # Hướng dẫn
+        # Footer
         tk.Label(
             self, 
             text="Phím tắt: [ESC] Quay lại | [Ctrl+Q] Thoát ngay", 
             bg="#2c3e50", 
-            fg="#7f8c8d"
-        ).pack(side=tk.BOTTOM, pady=10)
-        
-        logger.info("✅ Main window initialized")
+            fg="#95a5a6",
+            font=("Segoe UI", 10)
+        ).pack(side=tk.BOTTOM, pady=20)
 
     def force_quit(self, event=None):
-        """Thoát cưỡng bức"""
         logger.warning("⚠️ FORCE QUIT by user (Ctrl+Q)")
         self.destroy()
         sys.exit(0)
 
     def show_error(self, exc_type, exc_value, exc_traceback):
-        """Xử lý lỗi toàn cục"""
         error_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
         logger.critical(f"❌ UNCAUGHT EXCEPTION:\n{error_msg}")
         messagebox.showerror(

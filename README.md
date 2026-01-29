@@ -147,3 +147,90 @@ CREATE TABLE IF NOT EXISTS attendance_logs (
 
 ![alt text](image.png)
 [Xem ERD trên Mermaid Live](https://mermaid.live/view#pako:eNp9U21PgzAQ_ivkPuMCzrHJt8VVs-jQCCbGkJDa3kZ1tKYtRp377xZmpiLab9fnnrvn3jbAFEeIAfVM0JWmVS4999LsZkaSLPU2O7t5GbnNPGNrjtIWgntX5x1M0go7X2xNjSk6wHxB0my6uPKYRmqRF9Tu0G0uP9OTNJ1fJj_Sz5OMnJFrz6AxQsleBaa-f0Bmix4lWqnqTyHGUm0LK_pRlPwbthc5zTKSzKbJCSkuLs96ta7Vqquzp4zT87-b_AP7alyJ7FHIruKG-4xaLAWjtgleoS0V__K4JtMLjym5FC4-w8Iwpbtl7Uf__n5woDa_yoy9HEpqcuiM6h93l9FSIVsO-LDSgkO8pGuDPlSoK9rY0PYvB1uiKwoaHsclrde2oW0d74nKOzdFiK2uHVOrelXu49RP3O3S5xLvXdzoUJ-oWlqIw7ANAfEGXiAeRsHgeDgejsIgiqIgCo98eIV4NBoE0eHRJJyMw2E4jrY-vLU5g8FkPPIBubBKL3ZH097O9gMAOfZ9)
+
+
+# 1. Mục tiêu công việc – Tuần 2
+
+Dựa trên kế hoạch tổng thể, các đầu mục công việc đã thực hiện trong tuần này bao gồm:
+
+- Thiết lập môi trường phát triển (Environment Setup)
+- Xây dựng cấu trúc thư mục dự án (Project Structure / Base Code)
+- Thiết kế và khởi tạo Cơ sở dữ liệu (Database Setup)
+- Xây dựng các hàm tiền xử lý dữ liệu hình ảnh (Data Preprocessing)
+
+---
+
+# 2. Chi tiết thực hiện
+
+## 2.1. Thiết lập môi trường phát triển
+
+Đã tiến hành cài đặt các thư viện cần thiết dựa trên công nghệ gợi ý (OpenCV, dlib / face_recognition).
+
+- **Ngôn ngữ**: Python 3.x  
+- **Quản lý thư viện**: pip  
+
+### File `requirements.txt`
+
+```plaintext
+opencv-python
+numpy
+face_recognition
+pandas
+openpyxl
+cmake
+dlib
+```
+
+---
+
+## 2.2. Cấu trúc dự án (Project Structure)
+
+```plaintext
+FaceAttendanceSystem/
+├── data/
+│   ├── images/
+│   └── database/
+├── src/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── database.py
+│   ├── face_utils.py
+│   └── main.py
+├── reports/
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 2.3. Thiết kế Cơ sở dữ liệu (Database Design)
+
+### Bảng `users`
+
+| Tên cột | Kiểu dữ liệu | Mô tả |
+|-------|------------|------|
+| `id` | INTEGER (PK, AUTOINCREMENT) | ID nội bộ |
+| `user_id` | TEXT (UNIQUE) | Mã sinh viên |
+| `name` | TEXT | Họ tên |
+| `face_encoding` | BLOB | Vector khuôn mặt |
+| `created_at` | TIMESTAMP | Thời gian tạo |
+
+```sql
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT UNIQUE,
+    name TEXT,
+    face_encoding BLOB,
+    created_at TIMESTAMP
+);
+```
+
+---
+
+# 3. Kết quả & Khó khăn
+
+## Kết quả
+
+- [x] Hoàn thành khung dự án
+- [x] Tạo CSDL attendance.db
+- [x] Mã hóa khuôn mặt thành công
