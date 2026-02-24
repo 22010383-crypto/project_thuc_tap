@@ -35,7 +35,7 @@ class RegisterWindow(tk.Toplevel):
         
         self.e_id = self.mk_entry(left, "Mã Sinh Viên (MSSV):")
         self.e_name = self.mk_entry(left, "Họ và Tên:")
-        self.e_class = self.mk_entry(left, "Lớp Hành Chính:")
+        self.e_class = self.mk_entry(left, "Lớp:")
         
         self.btn = tk.Button(left, text="CHỤP & LƯU", command=self.do_capture, 
                              bg="#2ecc71", fg="white", font=("Arial", 12, "bold"), height=2)
@@ -56,7 +56,6 @@ class RegisterWindow(tk.Toplevel):
         frame = self.video.read()
         if frame is not None:
             self.current_frame = frame.copy()
-            # Vẽ khung xanh hướng dẫn
             disp = frame.copy()
             h, w, _ = disp.shape
             cv2.rectangle(disp, (w//4, h//6), (3*w//4, 5*h//6), (0,255,0), 2)

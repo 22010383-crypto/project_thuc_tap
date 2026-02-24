@@ -8,14 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 class LivenessDetector:
-    """
-    Robust liveness detector using MediaPipe Face Mesh.
-    
-    Implements:
-    1. Active Liveness: Blink Detection (EAR), Head Pose (solvePnP)
-    2. Passive Liveness: Blur, Glare, Frequency Analysis (FFT)
-    """
-    
     # MediaPipe Face Mesh landmark indices
     LEFT_EYE_IDXS = [33, 160, 158, 133, 153, 144]   # Upper and lower eyelids
     RIGHT_EYE_IDXS = [362, 385, 387, 263, 373, 380]
@@ -39,24 +31,13 @@ class LivenessDetector:
                  head_pose_threshold: float = 15.0,
                  blur_threshold: float = 100.0,
                  static_image_mode: bool = False):
-        """
-        Initialize Liveness Detector.
-        
-        Args:
-            ear_threshold: Eye Aspect Ratio below this = closed eye
-            blink_consec_frames: Frames required for valid blink
-            head_pose_threshold: Degrees for head turn detection
-            blur_threshold: Laplacian variance threshold
-            static_image_mode: MediaPipe mode (False for video)
-        """
-        logger.info("🔧 Initializing Advanced LivenessDetector with MediaPipe...")
         
         # MediaPipe Face Mesh
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             static_image_mode=static_image_mode,
             max_num_faces=1,
-            refine_landmarks=True,  # Include iris landmarks
+            refine_landmarks=True,   
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
@@ -79,8 +60,6 @@ class LivenessDetector:
     
     def analyze(self, frame: np.ndarray, face_box: Optional[Tuple[int, int, int, int]] = None) -> Dict:
         """
-        Main analysis method.
-        
         Args:
             frame: BGR image (numpy array)
             face_box: Optional (top, right, bottom, left) for optimization

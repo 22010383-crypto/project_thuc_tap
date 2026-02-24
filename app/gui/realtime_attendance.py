@@ -91,10 +91,9 @@ class RealtimeAttendanceWindow(tk.Toplevel):
             if not encodings or not ids:
                 raise Exception("Chưa có dữ liệu khuôn mặt. Hãy đăng ký trước!")
             
-            # Create session
-            db = DatabaseManager(cooldown_minutes=0.05)  # 3 second cooldown
+            db = DatabaseManager(cooldown_minutes=0.05)  
             session_id = db.create_session(f"RT_{datetime.now().strftime('%H%M')}")
-            self.end_time = datetime.now() + timedelta(minutes=45)
+            self.end_time = datetime.now() + timedelta(minutes=45) # Thời gian điểm danh - e có thể sửa đây nhé
             
             # Initialize system
             self.system = OptimizedAttendanceSystem(encodings, ids, db, session_id)
@@ -107,7 +106,7 @@ class RealtimeAttendanceWindow(tk.Toplevel):
             self.cap.set(cv2.CAP_PROP_FPS, 30)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
-            self.lbl_session.config(text=f"Session #{session_id} - Real-time Mode")
+            self.lbl_session.config(text=f"Phiên #{session_id} - Real-time")
             
             self.running = True
             self.update_loop()
@@ -115,7 +114,7 @@ class RealtimeAttendanceWindow(tk.Toplevel):
             
         except Exception as e:
             import traceback
-            error_msg = f"Init failed: {e}\n\n{traceback.format_exc()}"
+            error_msg = f"Lỡi realtime attendance: {e}\n\n{traceback.format_exc()}"
             messagebox.showerror("Lỗi", error_msg)
             self.cleanup()
     

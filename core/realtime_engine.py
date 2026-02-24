@@ -193,7 +193,7 @@ class RealtimeAntiSpoof:
                     if current_time - state['last_blink'] > 0.35:
                         state['blink_count'] += 1
                         state['last_blink'] = current_time
-                        logger.info(f"👁️ BLINK {face_id} count={state['blink_count']}")
+                        logger.info(f"BLINK {face_id} count={state['blink_count']}")
             
             # Cử động đầu: chấp nhận thay blink (ngưỡng vừa)
             nose_tip = landmarks[1]
