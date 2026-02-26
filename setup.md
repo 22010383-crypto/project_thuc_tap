@@ -43,7 +43,7 @@ Hệ thống yêu cầu một file model đã được train sẵn để phát h
 ---
 
 🔹 Linux / macOS
-python3.10 -m venv venv || python3 -m venv venv
+python3.10 -m venv venv
 source venv/bin/activate
 
 🔹 Windows (PowerShell)
@@ -61,5 +61,12 @@ pip install --upgrade pip setuptools wheel
 Cài thư viện từ requirements.txt
 pip install -r requirements.txt
 
+LƯU Ý QUAN TRỌNG VỀ dlib (RẤT DỄ LỖI)
 
-python -m app.main
+dlib là thư viện C++, thường gây treo khi cài bằng pip.
+Cách cài phụ thuộc hệ điều hành
+
+Ubuntu / Debian (KHUYÊN DÙNG)
+Cài dlib từ system package (NHANH & ỔN ĐỊNH)
+sudo apt update
+sudo apt install -y python3-dlib

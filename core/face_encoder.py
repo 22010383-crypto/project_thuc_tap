@@ -1,6 +1,7 @@
 import face_recognition
 import pickle
 import os
+import cv2
 import numpy as np
 from app.config import Config
 
@@ -115,3 +116,13 @@ class FaceEncoder:
         # Lưu xuống file ngay lập tức
         self.save_database()
         print(f"🗑️ Đã xóa vector khuôn mặt của: {user_id}")
+        
+# doc
+# Thư viện face_recognition: là thư viện nhận diện khuôn mặt 
+# được xây dựng trên nền tảng dlib (viết bằng C++).
+
+# Mô hình ResNet (Deep Learning): 
+#     face_recognition sử dụng một mạng nơ-ron tích chập (CNN) đã được huấn luyện sẵn 
+#     để biến một khuôn mặt thành một vector gồm 128 giá trị số (gọi là Face Encoding).
+
+# Pickle: Dùng để "đóng gói" (serialize) các vector này và lưu xuống ổ cứng dưới dạng file nhị phân.

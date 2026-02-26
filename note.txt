@@ -1,0 +1,24 @@
+REALTIME MODE - STATUS
+=====================
+
+ĐÃ TẠO:
+- core/realtime_engine.py           ✓ Code hoàn chỉnh
+- app/gui/realtime_attendance.py    ✓ Code hoàn chỉnh  
+- run_realtime.py                   ✓ Script chạy
+- test_realtime_simple.py           ✓ Test script
+
+DEPENDENCIES CẦN:
+- face_recognition     ✗ CHƯA CÀI
+- opencv-python        ?
+- numpy                ?
+- PIL/Pillow           ✗ CHƯA ĐỦ (thiếu ImageTk)
+
+FIX:
+sudo bash INSTALL_DEPS.sh
+
+HOẶC:
+
+python3 -m venv venv
+source venv/bin/activate  
+pip install -r requirements.txt
+python run_realtime.py

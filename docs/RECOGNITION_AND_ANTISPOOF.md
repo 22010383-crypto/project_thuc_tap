@@ -1,6 +1,6 @@
 # Logic nhận diện khuôn mặt và xác định giả mạo
 
-Tài liệu mô tả luồng xử lý nhận diện khuôn mặt và chống điểm danh giả (anti-spoofing) trong chế độ Real-time.
+Tài liệu mô tả luồng xử lý nhận diện khuôn mặt và chống điểm danh giả (anti-spoofing)  
 
 ---
 
@@ -135,5 +135,4 @@ Mỗi vùng mặt (mỗi `person_id`) có **state riêng** (`person_states[face_
 - **database/db_manager.py:** mark_attendance (ghi session_id, student_id, confidence_score, liveness_score, liveness_details).
 
 ---
-
-*Tài liệu tương ứng với logic trong `core/realtime_engine.py` (realtime mode) tại thời điểm viết.*
+ 
